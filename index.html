@@ -1,160 +1,435 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meep Compliance Dashboard</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #0b1120; margin: 0; font-family: 'Inter', sans-serif; overflow: hidden; }
-        .circular-score { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; border: 2px solid; }
-        .matrix-cell { height: 45px; border-radius: 6px; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.05); }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  ShieldAlert, 
+  ShieldCheck, 
+  Activity, 
+  Globe, 
+  Cpu, 
+  ChevronRight,
+  UserCheck,
+  Scale,
+  Landmark,
+  Newspaper,
+  UploadCloud,
+  FileText,
+  LayoutGrid,
+  CheckCircle2,
+  AlertTriangle,
+  User,
+  ArrowUpRight,
+  ArrowDownRight,
+  Search,
+  Filter,
+  Lock,
+  Unlock
+} from 'lucide-react';
 
-    <script type="text/babel">
-        const { useState, useRef } = React;
+const LABELS_IMPACTO = ["Insignificante", "Menor", "Moderado", "Maior", "Catastrófico"];
+const LABELS_PROBABILIDADE = ["Muito Baixa", "Baixa", "Média", "Alta", "Muito Alta"];
 
-        const LABELS_IMPACTO = ["Insignificante", "Menor", "Moderado", "Maior", "Catastrófico"];
-        const LABELS_PROB = ["Muito Baixa", "Baixa", "Média", "Alta", "Muito Alta"];
+// Mock de Transações para Monitoramento
+const mockTransactions = [
+  { id: 'TX-8821', merchant: 'Restaurante Sabor Real', value: 45000.00, risk: 92, type: 'High Velocity / Fracionamento', status: 'Em Análise', time: 'Há 2 min', flag: 'CRÍTICO' },
+  { id: 'TX-8822', merchant: 'Tech Store LTDA', value: 1250.00, risk: 12, type: 'Venda Padrão', status: 'Aprovado', time: 'Há 5 min', flag: 'BAIXO' },
+  { id: 'TX-8823', merchant: 'M.J. Comércio Me', value: 150000.00, risk: 85, type: 'Fora de Perfil (Ticket Médio)', status: 'Trava Preventiva', time: 'Há 12 min', flag: 'ALTO' },
+  { id: 'TX-8824', merchant: 'Posto Central', value: 300.00, risk: 5, type: 'Venda Padrão', status: 'Aprovado', time: 'Há 15 min', flag: 'BAIXO' },
+  { id: 'TX-8825', merchant: 'Joalheria Brilho', value: 25000.00, risk: 78, type: 'Cartão não Presente / Suspeita de Fraude', status: 'Bloqueado', time: 'Há 18 min', flag: 'ALTO' },
+];
 
-        function App() {
-            const [activeTab, setActiveTab] = useState('monitoramento');
-            const [analyzing, setAnalyzing] = useState(false);
-            const [dossier, setDossier] = useState(null);
-            const fileInputRef = useRef(null);
+export default function ComplianceDashboard() {
+  const [activeTab, setActiveTab] = useState('monitoramento'); // Default para monitoramento
+  const [analyzingDossier, setAnalyzingDossier] = useState(false);
+  const [dossierData, setDossierData] = useState(null);
+  const fileInputRef = useRef(null);
 
-            // --- DADOS MONITORAMENTO (ESTILO FOTO 1) ---
-            const transactions = [
-                { id: 'TX-8821', merchant: 'Restaurante Sabor Real', value: 45000, risk: 92, type: 'High Velocity / Fracionamento', status: 'EM ANÁLISE', statusColor: 'text-orange-400 bg-orange-400/10' },
-                { id: 'TX-8822', merchant: 'Tech Store LTDA', value: 1250, risk: 12, type: 'Venda Padrão', status: 'APROVADO', statusColor: 'text-emerald-400 bg-emerald-400/10' },
-                { id: 'TX-8823', merchant: 'M.J. Comércio Me', value: 150000, risk: 85, type: 'Fora de Perfil (Ticket Médio)', status: 'TRAVA PREVENTIVA', statusColor: 'text-red-400 bg-red-400/10' },
-                { id: 'TX-8824', merchant: 'Posto Central', value: 300, risk: 5, type: 'Venda Padrão', status: 'APROVADO', statusColor: 'text-emerald-400 bg-emerald-400/10' },
-                { id: 'TX-8825', merchant: 'Joalheria Brilho', value: 25000, risk: 78, type: 'Cartão não Presente / Suspeita de Fraude', status: 'BLOQUEADO', statusColor: 'text-red-500 bg-red-500/10' }
-            ];
+  const getRiskClassification = (score) => {
+    if (score >= 15) return { label: 'CRÍTICO', colorClass: 'text-red-500', bgClass: 'bg-red-500', borderClass: 'border-red-500/50' };
+    if (score >= 10) return { label: 'ALTO', colorClass: 'text-orange-500', bgClass: 'bg-orange-500', borderClass: 'border-orange-500/50' };
+    if (score >= 5) return { label: 'MÉDIO', colorClass: 'text-yellow-500', bgClass: 'bg-yellow-500', borderClass: 'border-yellow-500/50' };
+    return { label: 'BAIXO', colorClass: 'text-emerald-500', bgClass: 'bg-emerald-500', borderClass: 'border-emerald-500/50' };
+  };
 
-            // --- MOTOR DE INVESTIGAÇÃO (LÓGICA KRONOOS) ---
-            const analyzeText = (text) => {
-                const lower = text.toLowerCase();
-                setAnalyzing(true);
-                
-                setTimeout(() => {
-                    let prob = 1, imp = 1;
-                    const vinculoKeywords = ['sócio', 'mãe', 'pai', 'irmão', 'cônjuge', 'filho', 'familiar'];
-                    const foundVinculo = vinculoKeywords.find(k => lower.includes(k));
-                    const isRelational = !!foundVinculo;
-                    const target = isRelational ? foundVinculo.toUpperCase() : "TITULAR";
+  const analyzeDocumentText = (text) => {
+    const lowerText = text.toLowerCase();
+    let probabilidade = 1;
+    let impacto = 1;
+    
+    const relations = [
+      { key: 'sócio', label: 'Sócio/Administrador', impactType: 'Risco de Beneficiário Final' },
+      { key: 'mãe', label: 'Progenitora (Mãe)', impactType: 'Vínculo Familiar de 1º Grau' },
+      { key: 'pai', label: 'Progenitor (Pai)', impactType: 'Vínculo Familiar de 1º Grau' },
+      { key: 'irmão', label: 'Irmão/Irmã', impactType: 'Vínculo Familiar Colateral' },
+      { key: 'irmao', label: 'Irmão/Irmã', impactType: 'Vínculo Familiar Colateral' },
+      { key: 'cônjuge', label: 'Cônjuge/Companheiro(a)', impactType: 'Estreito Relacionamento' },
+      { key: 'conjuge', label: 'Cônjuge/Companheiro(a)', impactType: 'Estreito Relacionamento' },
+      { key: 'filho', label: 'Descendente (Filho/a)', impactType: 'Vínculo Familiar de 1º Grau' }
+    ];
 
-                    let checks = [];
+    const detectedRelation = relations.find(r => lowerText.includes(r.key));
+    const isRelational = !!detectedRelation;
+    const targetLabel = isRelational ? detectedRelation.label : "Titular (Lojista)";
+    const impactContext = isRelational ? detectedRelation.impactType : "Risco Direto no Titular";
 
-                    if (lower.includes('pep') || lower.includes('político')) {
-                        prob = 3; imp = 3;
-                        checks.push({
-                            title: "PEP (POLITICAMENTE EXPOSTA)",
-                            status: "ALERTA",
-                            desc: isRelational ? `O vínculo (${target}) é PEP. Risco de ocultação.` : "O titular é PEP direto.",
-                            action: isRelational ? "Identificar Beneficiário Final. Coletar DPOP do lojista." : "Coletar DPOP. Aprovação obrigatória da Diretoria.",
-                            basis: "Res. COAF 40/2021"
-                        });
-                    }
+    let checks = [
+      { 
+        id: 'pep', title: 'PEP (Pessoa Politicamente Exposta)', status: 'clear', target: 'Nenhum',
+        text: 'Nenhum vínculo político detectado nas bases consultadas pelo Kronoos.', 
+        actionPlan: { action: 'Fluxo padrão: Aprovação do credenciamento sem restrições.', basis: 'CDD - Circ. BCB 3.978/20' }, 
+        icon: Landmark 
+      },
+      { 
+        id: 'ofac', title: 'Listas Restritivas (ONU/OFAC/COAF)', status: 'clear', target: 'Nenhum',
+        text: 'Consulta negativa em listas de sanções nacionais e internacionais.', 
+        actionPlan: { action: 'Fluxo padrão: Monitoramento contínuo ativo.', basis: 'Lei 13.810/2019' }, 
+        icon: ShieldCheck 
+      },
+      { 
+        id: 'juridico', title: 'Risco Jurídico (PLD/CFT)', status: 'clear', target: 'Nenhum',
+        text: 'Sem processos criminais ou mandados ativos identificados.', 
+        actionPlan: { action: 'Fluxo padrão: Operação liberada.', basis: 'Art. 15, Circ. BCB 3.978/20' }, 
+        icon: Scale 
+      },
+      { 
+        id: 'reputacional', title: 'Mídia Negativa', status: 'clear', target: 'Nenhum',
+        text: 'Nenhuma notícia ou exposição negativa detectada.', 
+        actionPlan: { action: 'Risco dentro do apetite da Meep.', basis: 'Res. CMN 4.595/17' }, 
+        icon: Newspaper 
+      }
+    ];
 
-                    if (lower.includes('processo') || lower.includes('fraude') || lower.includes('crime')) {
-                        prob = Math.max(prob, 5); imp = Math.max(imp, 4);
-                        checks.push({
-                            title: "RISCO JURÍDICO / PLD",
-                            status: "CRÍTICO",
-                            desc: `Detectado histórico criminal ligado a ${target}.`,
-                            action: isRelational ? "Trava preventiva. Investigar se o titular é 'Laranja'." : "Descredenciar imediatamente e reportar ao COAF.",
-                            basis: "Lei 9.613/1998"
-                        });
-                    }
+    if (lowerText.includes('pep') || lowerText.includes('político') || lowerText.includes('eleitoral')) {
+      probabilidade = Math.max(probabilidade, 3);
+      impacto = Math.max(impacto, 3);
+      checks[0] = {
+        id: 'pep',
+        title: isRelational ? 'PEP por Estreito Relacionamento' : 'PEP Direto',
+        status: 'warning',
+        target: targetLabel,
+        text: isRelational 
+          ? `O Kronoos identificou que o ${targetLabel} é PEP. Há risco de ocultação de patrimônio através do lojista.`
+          : `O próprio lojista titular é classificado como PEP.`,
+        actionPlan: {
+          action: isRelational 
+            ? 'Identificar o Beneficiário Final. Se o PEP for sócio, travar liquidação até coleta de DPOP e aprovação de Diretor.'
+            : 'Coletar DPOP do lojista. Obrigatória marcação de PEP no sistema Meep e aprovação da Alta Administração.',
+          basis: 'Art. 1º, § 1º, Res. COAF 40/21'
+        },
+        icon: Landmark
+      };
+    }
 
-                    if (checks.length === 0) {
-                        checks.push({ title: "DILIGÊNCIA PADRÃO", status: "LIMPO", desc: "Nenhum apontamento grave.", action: "Aprovação automática.", basis: "Circ. BCB 3.978/20" });
-                    }
+    if (lowerText.includes('processo') || lowerText.includes('fraude') || lowerText.includes('lavagem') || lowerText.includes('crime') || lowerText.includes('estelionato')) {
+      probabilidade = Math.max(probabilidade, 4);
+      impacto = Math.max(impacto, 4);
+      checks[2] = {
+        id: 'juridico',
+        title: isRelational ? 'Risco Jurídico por Interposta Pessoa' : 'Risco Jurídico Direto',
+        status: 'critical',
+        target: targetLabel,
+        text: isRelational
+          ? `Apontamento de crime/fraude identificado no ${targetLabel}. Risco de "Laranja": o titular pode estar sendo usado para movimentar fundos ilícitos.`
+          : `Titular possui histórico direto de processos criminais ou fraude.`,
+        actionPlan: {
+          action: isRelational
+            ? 'Bloqueio preventivo de 48h para análise de transacional. Se o vínculo for sócio majoritário, descredenciar por risco de lavagem.'
+            : 'Descredenciamento imediato por violação das normas de conformidade Meep. Reportar COS ao SISCOAF em 24h.',
+          basis: 'Art. 11, Lei 9.613/98'
+        },
+        icon: Scale
+      };
+    }
 
-                    setDossier({ name: "Resultado Dossiê Kronoos", prob, imp, score: prob * imp, target, checks });
-                    setAnalyzing(false);
-                }, 1500);
-            };
+    if (lowerText.includes('ofac') || lowerText.includes('sanção') || lowerText.includes('terrorismo') || lowerText.includes('csnu')) {
+      probabilidade = 5;
+      impacto = 5;
+      checks[1] = {
+        id: 'ofac', title: 'Sanção / Lista Restritiva', status: 'critical', target: targetLabel,
+        text: `ALERTA: Correspondência em lista de sanções identificada no ${targetLabel}.`,
+        actionPlan: {
+          action: 'BLOQUEIO IMEDIATO E INDISPONIBILIDADE DE ATIVOS. Não comunicar o cliente. Bloquear terminal Meep e reportar ao COAF/MJ/BCB.',
+          basis: 'Lei 13.810/2019 (Indisponibilidade de Ativos)'
+        },
+        icon: ShieldCheck
+      };
+    }
 
-            const getRiskColor = (risk) => {
-                if (risk >= 15 || risk > 80) return 'border-red-500 text-red-500 bg-red-500/10';
-                if (risk >= 10 || risk > 50) return 'border-orange-500 text-orange-500 bg-orange-500/10';
-                return 'border-emerald-500 text-emerald-500 bg-emerald-500/10';
-            };
+    const score = probabilidade * impacto;
+    const classification = getRiskClassification(score);
+    const nameMatch = text.match(/nome:\s*([A-Za-zÀ-ÿ ]+)/i) || text.match(/razao social:\s*([A-Za-zÀ-ÿ ]+)/i);
+    const extractedName = nameMatch ? nameMatch[1].trim() : "Lojista Investigado (Kronoos)";
 
-            return (
-                <div className="flex h-screen text-slate-200 overflow-hidden">
-                    {/* Sidebar */}
-                    <div className="w-64 bg-[#0f172a] border-r border-slate-800 flex flex-col shrink-0">
-                        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-                            <i className="fa-solid fa-shield-halved text-blue-500 text-2xl"></i>
-                            <div className="leading-tight">
-                                <div className="font-bold text-lg">RiskAnalytics</div>
-                                <div className="text-blue-400 text-[10px] uppercase font-bold tracking-widest">Meep Compliance</div>
+    return {
+      name: extractedName,
+      document: "Investigação Detalhada de Vínculos",
+      probabilidade,
+      impacto,
+      score,
+      classification,
+      checks,
+      investigationContext: { target: targetLabel, impact: impactContext }
+    };
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setAnalyzingDossier(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setTimeout(() => {
+        setDossierData(analyzeDocumentText(event.target.result));
+        setAnalyzingDossier(false);
+      }, 2000);
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="flex h-screen bg-[#0b1120] text-slate-200 font-sans overflow-hidden">
+      
+      {/* Sidebar Integrada */}
+      <div className="w-64 bg-[#0f172a] border-r border-slate-800 flex flex-col">
+        <div className="p-4 border-b border-slate-800 flex items-center gap-3">
+          <ShieldAlert className="text-blue-500" size={28} />
+          <h1 className="font-bold text-lg leading-tight tracking-wide">
+            RiskAnalytics<br/><span className="text-blue-400 text-xs font-medium uppercase tracking-widest">Meep Compliance</span>
+          </h1>
+        </div>
+        
+        <nav className="flex-1 p-4 space-y-2">
+          <button 
+            onClick={() => setActiveTab('monitoramento')}
+            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${activeTab === 'monitoramento' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-semibold' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+          >
+            <Activity size={20} />
+            Monitoramento
+          </button>
+          <button 
+            onClick={() => setActiveTab('kyc')}
+            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${activeTab === 'kyc' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-semibold' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+          >
+            <UserCheck size={20} />
+            Dossiê Kronoos
+          </button>
+        </nav>
+
+        <div className="p-4 border-t border-slate-800">
+          <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+            Sistema Online
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col h-full overflow-y-auto">
+        <header className="bg-[#0f172a] border-b border-slate-800 p-4 sticky top-0 z-50 flex justify-between items-center">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            {activeTab === 'monitoramento' ? <Activity className="text-blue-500"/> : <LayoutGrid className="text-blue-500"/>}
+            {activeTab === 'monitoramento' ? 'Monitoramento Transacional Meep' : 'Análise Especializada de Investigação'}
+          </h2>
+          <div className="flex items-center gap-4">
+             <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
+                <input type="text" placeholder="Buscar Lojista ou TX..." className="bg-slate-800 border border-slate-700 rounded-full py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-blue-500 w-64"/>
+             </div>
+          </div>
+        </header>
+
+        <div className="p-6">
+          {/* ABA DE MONITORAMENTO */}
+          {activeTab === 'monitoramento' && (
+            <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in">
+              {/* KPIs de Monitoramento */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-[#0f172a] p-4 rounded-xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">TXs em Análise (24h)</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold">142</span>
+                    <span className="text-xs text-red-400 flex items-center font-bold tracking-tighter">+12% <ArrowUpRight size={12}/></span>
+                  </div>
+                </div>
+                <div className="bg-[#0f172a] p-4 rounded-xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Alertas Críticos</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-red-500">08</span>
+                    <span className="text-xs text-slate-500">Pendente Ação</span>
+                  </div>
+                </div>
+                <div className="bg-[#0f172a] p-4 rounded-xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Total Bloqueado (Hoje)</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold">R$ 48.9k</span>
+                    <span className="text-xs text-emerald-400 flex items-center font-bold tracking-tighter">-4% <ArrowDownRight size={12}/></span>
+                  </div>
+                </div>
+                <div className="bg-[#0f172a] p-4 rounded-xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">SLA de Resposta</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-blue-400">18 min</span>
+                    <span className="text-xs text-slate-500 font-bold tracking-tighter">Média Meep</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabela de Monitoramento */}
+              <div className="bg-[#0f172a] rounded-xl border border-slate-800 overflow-hidden">
+                <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/30">
+                  <h3 className="text-sm font-bold flex items-center gap-2"><Activity size={16} className="text-blue-500"/> Transações Recentes sob Suspeita</h3>
+                  <button className="text-[10px] font-bold uppercase text-blue-400 flex items-center gap-1 hover:underline"><Filter size={12}/> Ver todos os filtros</button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-[10px] uppercase font-bold text-slate-500 border-b border-slate-800">
+                        <th className="px-6 py-4">Lojista / Merchant</th>
+                        <th className="px-6 py-4">Valor</th>
+                        <th className="px-6 py-4 text-center">Score IA</th>
+                        <th className="px-6 py-4">Padrão Detectado</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {mockTransactions.map((tx) => (
+                        <tr key={tx.id} className="hover:bg-slate-800/20 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="font-semibold text-sm">{tx.merchant}</div>
+                            <div className="text-[10px] text-slate-500 uppercase">{tx.id} • {tx.time}</div>
+                          </td>
+                          <td className="px-6 py-4 font-mono text-sm">
+                            {tx.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex justify-center">
+                              <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-xs ${tx.risk > 80 ? 'border-red-500 text-red-500 bg-red-500/10' : tx.risk > 40 ? 'border-orange-500 text-orange-500 bg-orange-500/10' : 'border-emerald-500 text-emerald-500 bg-emerald-500/10'}`}>
+                                {tx.risk}
+                              </div>
                             </div>
+                          </td>
+                          <td className="px-6 py-4 text-xs font-medium italic text-slate-300">
+                            {tx.type}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${tx.status === 'Aprovado' ? 'bg-emerald-500/20 text-emerald-500' : tx.status === 'Bloqueado' ? 'bg-red-500/20 text-red-500' : 'bg-orange-500/20 text-orange-500'}`}>
+                              {tx.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                             <div className="flex justify-end gap-2">
+                                <button title="Bloquear Liquidação" className="p-1.5 hover:bg-red-500/20 hover:text-red-400 rounded text-slate-500 transition-colors"><Lock size={16}/></button>
+                                <button title="Ver Dossiê Relacionado" className="p-1.5 hover:bg-blue-500/20 hover:text-blue-400 rounded text-slate-500 transition-colors"><FileText size={16}/></button>
+                                <button title="Liberar Manualmente" className="p-1.5 hover:bg-emerald-500/20 hover:text-emerald-400 rounded text-slate-500 transition-colors"><Unlock size={16}/></button>
+                             </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ABA DE KYC / DOSSIÊ (Existente) */}
+          {activeTab === 'kyc' && (
+            <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in">
+              {!dossierData && (
+                <div className="bg-[#0f172a] rounded-xl border border-slate-800 p-8 flex flex-col items-center justify-center text-center h-[500px]">
+                  <div className="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center mb-6 border border-blue-500/20">
+                    {analyzingDossier ? <Cpu className="text-blue-400 animate-pulse" size={40} /> : <UploadCloud className="text-blue-400" size={40} />}
+                  </div>
+                  <h3 className="text-2xl font-bold mb-2">
+                    {analyzingDossier ? 'Analisando Sujeitos e Vínculos...' : 'Upload do Dossiê Kronoos'}
+                  </h3>
+                  <p className="text-slate-400 mb-8 max-w-lg text-sm">
+                    Carregue o arquivo de texto do Kronoos para identificarmos se o risco é direto no titular ou por parentesco/vínculo.
+                  </p>
+                  <input type="file" accept=".txt" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+                  <button onClick={() => fileInputRef.current.click()} disabled={analyzingDossier} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-600/20">
+                    {analyzingDossier ? 'Identificando Sujeitos...' : 'Selecionar Dossiê (.txt)'}
+                  </button>
+                </div>
+              )}
+
+              {dossierData && (
+                <div className="space-y-6">
+                  {/* ... Cabeçalho e Grid da Matrix de Risco (Mesma lógica anterior) ... */}
+                  <div className="flex justify-between items-center bg-[#0f172a] p-5 rounded-xl border border-slate-800 shadow-xl">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-slate-800 rounded-lg"><FileText size={24} className="text-blue-400"/></div>
+                      <div>
+                        <h3 className="text-xl font-bold">{dossierData.name}</h3>
+                        <div className="flex items-center gap-4 mt-1">
+                          <span className={`text-xs px-2 py-0.5 rounded font-bold bg-opacity-20 ${dossierData.classification.bgClass} ${dossierData.classification.colorClass}`}>
+                            RISCO: {dossierData.classification.label}
+                          </span>
+                          <div className="text-xs text-slate-400 border-l border-slate-700 pl-4 flex items-center gap-1">
+                            <User size={14}/> Foco: <span className="text-blue-300 font-semibold">{dossierData.investigationContext.target}</span>
+                          </div>
                         </div>
-                        <nav className="flex-1 p-4 space-y-2">
-                            <button onClick={() => setActiveTab('monitoramento')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'monitoramento' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold' : 'text-slate-400 hover:bg-slate-800'}`}>
-                                <i className="fa-solid fa-chart-line"></i> Monitoramento
-                            </button>
-                            <button onClick={() => setActiveTab('kyc')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'kyc' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold' : 'text-slate-400 hover:bg-slate-800'}`}>
-                                <i className="fa-solid fa-user-shield"></i> Dossiê Kronoos
-                            </button>
-                        </nav>
+                      </div>
+                    </div>
+                    <button onClick={() => setDossierData(null)} className="text-xs bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded border border-slate-700 transition-colors">Nova Investigação</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Matrix Visual */}
+                    <div className="bg-[#0f172a] rounded-xl border border-slate-800 p-6">
+                       <h4 className="text-xs font-bold mb-6 text-slate-500 uppercase tracking-widest">Matriz de Decisão PLD/CFT</h4>
+                       <div className="flex">
+                         <div className="flex flex-col justify-between pr-4 w-20 pt-8">
+                           {[5,4,3,2,1].map(p => (
+                             <div key={p} className="h-14 flex flex-col justify-center items-end text-right">
+                               <span className="text-[10px] font-bold text-slate-300">P{p}</span>
+                             </div>
+                           ))}
+                         </div>
+                         <div className="flex-1">
+                           <div className="grid grid-cols-5 gap-2 mb-2">
+                             {[1,2,3,4,5].map(i => <div key={i} className="text-center"><span className="text-[10px] font-bold text-slate-300">I{i}</span></div>)}
+                           </div>
+                           <div className="grid grid-cols-5 gap-2">
+                             {[5,4,3,2,1].map(p => [1,2,3,4,5].map(i => {
+                               const val = p * i;
+                               const cls = getRiskClassification(val);
+                               const active = dossierData.probabilidade === p && dossierData.impacto === i;
+                               return (
+                                 <div key={`${p}-${i}`} className={`h-14 rounded border transition-all ${cls.borderClass} ${active ? `${cls.bgClass} bg-opacity-30 scale-105 shadow-lg shadow-black` : 'bg-slate-800/20 opacity-30'}`}></div>
+                               );
+                             }))}
+                           </div>
+                         </div>
+                       </div>
                     </div>
 
-                    {/* Content */}
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        <header className="p-5 border-b border-slate-800 bg-[#0b1120] flex justify-between items-center">
-                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                <i className={`fa-solid ${activeTab === 'monitoramento' ? 'fa-wave-square' : 'fa-magnifying-glass-chart'} text-blue-500`}></i>
-                                {activeTab === 'monitoramento' ? 'Monitoramento Transacional Meep' : 'Investigação Especializada de Vínculos'}
-                            </h2>
-                            <div className="relative">
-                                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
-                                <input type="text" placeholder="Buscar Lojista..." className="bg-slate-800/50 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-xs w-64 focus:outline-none focus:border-blue-500"/>
+                    {/* Cards de Risco */}
+                    <div className="space-y-4">
+                      {dossierData.checks.map(check => (
+                        <div key={check.id} className="bg-[#0f172a] rounded-xl border border-slate-800 p-4">
+                          <div className="flex justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <check.icon size={18} className={check.status === 'clear' ? 'text-emerald-500' : check.status === 'warning' ? 'text-orange-500' : 'text-red-500'}/>
+                              <h5 className="font-bold text-sm">{check.title}</h5>
                             </div>
-                        </header>
-
-                        <div className="flex-1 overflow-y-auto p-8 scroll-smooth">
-                            {activeTab === 'monitoramento' ? (
-                                <div className="space-y-8 animate-in fade-in duration-500">
-                                    {/* KPIs */}
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                        <div className="bg-[#0f172a] p-5 rounded-xl border border-slate-800">
-                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2 tracking-widest">TXS em Análise (24h)</div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-2xl font-bold">142</span>
-                                                <span className="text-[10px] text-red-400 font-bold bg-red-400/10 px-1.5 py-0.5 rounded">+12%</span>
-                                            </div>
-                                        </div>
-                                        <div className="bg-[#0f172a] p-5 rounded-xl border border-slate-800">
-                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2 tracking-widest">Alertas Críticos</div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-2xl font-bold text-red-500">08</span>
-                                                <span className="text-[10px] text-slate-500 font-bold">Pendente</span>
-                                            </div>
-                                        </div>
-                                        <div className="bg-[#0f172a] p-5 rounded-xl border border-slate-800">
-                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2 tracking-widest">Total Bloqueado</div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-2xl font-bold tracking-tighter">R$ 48.9k</span>
-                                                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-400/10 px-1.5 py-0.5 rounded">-4%</span>
-                                            </div>
-                                        </div>
-                                        <div className="bg-[#0f172a] p-5 rounded-xl border border-slate-800">
-                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2 tracking-widest">SLA de Resposta</div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-2xl font-bold text-blue-400 font-mono">18 min</span>
-                                                <span className="text-[10px] text-slate-500 font-bold
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${check.status === 'clear' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                              {check.status === 'clear' ? 'Limpo' : 'Alerta'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 italic mb-4">{check.text}</p>
+                          <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                             <div className="text-[9px] font-bold uppercase text-blue-500 mb-1">Ação na Meep</div>
+                             <p className="text-xs font-semibold">{check.actionPlan.action}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
