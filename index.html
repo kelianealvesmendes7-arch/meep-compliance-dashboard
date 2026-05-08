@@ -4,15 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meep Compliance Dashboard</title>
-    <!-- Bibliotecas externas -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #0b1120; margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
-        .matrix-cell { transition: all 0.3s ease; }
+        body { background-color: #0b1120; margin: 0; font-family: 'Inter', sans-serif; overflow: hidden; }
+        .circular-score { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; border: 2px solid; }
+        .matrix-cell { height: 45px; border-radius: 6px; transition: all 0.3s; border: 1px solid rgba(255,255,255,0.05); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -30,69 +33,64 @@
             const [dossier, setDossier] = useState(null);
             const fileInputRef = useRef(null);
 
+            // --- DADOS MONITORAMENTO (ESTILO FOTO 1) ---
             const transactions = [
-                { id: 'TX-9921', merchant: 'Restaurante Sabor Real', value: 45000, risk: 92, type: 'High Velocity', status: 'Crítico' },
-                { id: 'TX-9922', merchant: 'Tech Store LTDA', value: 1250, risk: 12, type: 'Venda Padrão', status: 'Aprovado' },
-                { id: 'TX-9923', merchant: 'M.J. Comércio Me', value: 150000, risk: 85, type: 'Fora de Perfil', status: 'Trava Prev.' },
-                { id: 'TX-9924', merchant: 'Joalheria Brilho', value: 25000, risk: 78, type: 'Cartão não Presente', status: 'Em Análise' }
+                { id: 'TX-8821', merchant: 'Restaurante Sabor Real', value: 45000, risk: 92, type: 'High Velocity / Fracionamento', status: 'EM ANÁLISE', statusColor: 'text-orange-400 bg-orange-400/10' },
+                { id: 'TX-8822', merchant: 'Tech Store LTDA', value: 1250, risk: 12, type: 'Venda Padrão', status: 'APROVADO', statusColor: 'text-emerald-400 bg-emerald-400/10' },
+                { id: 'TX-8823', merchant: 'M.J. Comércio Me', value: 150000, risk: 85, type: 'Fora de Perfil (Ticket Médio)', status: 'TRAVA PREVENTIVA', statusColor: 'text-red-400 bg-red-400/10' },
+                { id: 'TX-8824', merchant: 'Posto Central', value: 300, risk: 5, type: 'Venda Padrão', status: 'APROVADO', statusColor: 'text-emerald-400 bg-emerald-400/10' },
+                { id: 'TX-8825', merchant: 'Joalheria Brilho', value: 25000, risk: 78, type: 'Cartão não Presente / Suspeita de Fraude', status: 'BLOQUEADO', statusColor: 'text-red-500 bg-red-500/10' }
             ];
 
-            const getRiskColor = (score) => {
-                if (score >= 15) return { bg: 'bg-red-500', text: 'text-red-500', border: 'border-red-500/50' };
-                if (score >= 10) return { bg: 'bg-orange-500', text: 'text-orange-500', border: 'border-orange-500/50' };
-                if (score >= 5) return { bg: 'bg-yellow-500', text: 'text-yellow-500', border: 'border-yellow-500/50' };
-                return { bg: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500/50' };
+            // --- MOTOR DE INVESTIGAÇÃO (LÓGICA KRONOOS) ---
+            const analyzeText = (text) => {
+                const lower = text.toLowerCase();
+                setAnalyzing(true);
+                
+                setTimeout(() => {
+                    let prob = 1, imp = 1;
+                    const vinculoKeywords = ['sócio', 'mãe', 'pai', 'irmão', 'cônjuge', 'filho', 'familiar'];
+                    const foundVinculo = vinculoKeywords.find(k => lower.includes(k));
+                    const isRelational = !!foundVinculo;
+                    const target = isRelational ? foundVinculo.toUpperCase() : "TITULAR";
+
+                    let checks = [];
+
+                    if (lower.includes('pep') || lower.includes('político')) {
+                        prob = 3; imp = 3;
+                        checks.push({
+                            title: "PEP (POLITICAMENTE EXPOSTA)",
+                            status: "ALERTA",
+                            desc: isRelational ? `O vínculo (${target}) é PEP. Risco de ocultação.` : "O titular é PEP direto.",
+                            action: isRelational ? "Identificar Beneficiário Final. Coletar DPOP do lojista." : "Coletar DPOP. Aprovação obrigatória da Diretoria.",
+                            basis: "Res. COAF 40/2021"
+                        });
+                    }
+
+                    if (lower.includes('processo') || lower.includes('fraude') || lower.includes('crime')) {
+                        prob = Math.max(prob, 5); imp = Math.max(imp, 4);
+                        checks.push({
+                            title: "RISCO JURÍDICO / PLD",
+                            status: "CRÍTICO",
+                            desc: `Detectado histórico criminal ligado a ${target}.`,
+                            action: isRelational ? "Trava preventiva. Investigar se o titular é 'Laranja'." : "Descredenciar imediatamente e reportar ao COAF.",
+                            basis: "Lei 9.613/1998"
+                        });
+                    }
+
+                    if (checks.length === 0) {
+                        checks.push({ title: "DILIGÊNCIA PADRÃO", status: "LIMPO", desc: "Nenhum apontamento grave.", action: "Aprovação automática.", basis: "Circ. BCB 3.978/20" });
+                    }
+
+                    setDossier({ name: "Resultado Dossiê Kronoos", prob, imp, score: prob * imp, target, checks });
+                    setAnalyzing(false);
+                }, 1500);
             };
 
-            const handleFileUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                setAnalyzing(true);
-                setDossier(null);
-
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const text = event.target.result.toLowerCase();
-                    setTimeout(() => {
-                        // Lógica de Investigação Meep
-                        let prob = 1, imp = 1, isVinculo = text.includes('sócio') || text.includes('mãe') || text.includes('familiar');
-                        let checks = [];
-
-                        if (text.includes('pep') || text.includes('político')) {
-                            prob = 3; imp = 3;
-                            checks.push({
-                                title: "PEP",
-                                status: "Alerta",
-                                desc: isVinculo ? "Vínculo familiar/societário é PEP." : "Titular é PEP direto.",
-                                action: "Coletar DPOP e aprovação de diretoria.",
-                                legal: "Res. COAF 40/2021"
-                            });
-                        }
-
-                        if (text.includes('fraude') || text.includes('processo') || text.includes('crime')) {
-                            prob = 5; imp = 4;
-                            checks.push({
-                                title: "Jurídico",
-                                status: "Crítico",
-                                desc: "Identificado histórico de crimes financeiros.",
-                                action: "Descredenciamento imediato e reporte ao SISCOAF.",
-                                legal: "Lei 9.613/1998"
-                            });
-                        }
-
-                        if (checks.length === 0) {
-                            checks.push({ title: "Geral", status: "Limpo", desc: "Nenhum apontamento no Kronoos.", action: "Aprovação automática.", legal: "Circ. BCB 3.978/20" });
-                        }
-
-                        setDossier({ 
-                            name: "Lojista Extraído do Kronoos", 
-                            prob, imp, score: prob * imp, checks,
-                            target: isVinculo ? "Relacionado / Vínculo" : "Titular direto"
-                        });
-                        setAnalyzing(false);
-                    }, 1500);
-                };
-                reader.readAsText(file);
+            const getRiskColor = (risk) => {
+                if (risk >= 15 || risk > 80) return 'border-red-500 text-red-500 bg-red-500/10';
+                if (risk >= 10 || risk > 50) return 'border-orange-500 text-orange-500 bg-orange-500/10';
+                return 'border-emerald-500 text-emerald-500 bg-emerald-500/10';
             };
 
             return (
@@ -101,158 +99,62 @@
                     <div className="w-64 bg-[#0f172a] border-r border-slate-800 flex flex-col shrink-0">
                         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
                             <i className="fa-solid fa-shield-halved text-blue-500 text-2xl"></i>
-                            <h1 className="font-bold text-lg">Meep Risk</h1>
+                            <div className="leading-tight">
+                                <div className="font-bold text-lg">RiskAnalytics</div>
+                                <div className="text-blue-400 text-[10px] uppercase font-bold tracking-widest">Meep Compliance</div>
+                            </div>
                         </div>
                         <nav className="flex-1 p-4 space-y-2">
-                            <button onClick={() => setActiveTab('monitoramento')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'monitoramento' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'hover:bg-slate-800 text-slate-400'}`}>
+                            <button onClick={() => setActiveTab('monitoramento')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'monitoramento' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold' : 'text-slate-400 hover:bg-slate-800'}`}>
                                 <i className="fa-solid fa-chart-line"></i> Monitoramento
                             </button>
-                            <button onClick={() => setActiveTab('kyc')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'kyc' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'hover:bg-slate-800 text-slate-400'}`}>
+                            <button onClick={() => setActiveTab('kyc')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'kyc' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold' : 'text-slate-400 hover:bg-slate-800'}`}>
                                 <i className="fa-solid fa-user-shield"></i> Dossiê Kronoos
                             </button>
                         </nav>
                     </div>
 
-                    {/* Main Content */}
-                    <div className="flex-1 flex flex-col bg-[#0b1120] overflow-y-auto">
-                        <header className="p-5 border-b border-slate-800 bg-[#0f172a]/50 backdrop-blur-md sticky top-0 z-10 flex justify-between items-center">
-                            <h2 className="text-xl font-bold flex items-center gap-2">
-                                <i className={activeTab === 'monitoramento' ? "fa-solid fa-wave-square text-blue-500" : "fa-solid fa-magnifying-glass-chart text-blue-500"}></i>
-                                {activeTab === 'monitoramento' ? 'Centro de Comando de Riscos' : 'Investigação Especializada'}
+                    {/* Content */}
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                        <header className="p-5 border-b border-slate-800 bg-[#0b1120] flex justify-between items-center">
+                            <h2 className="text-xl font-semibold flex items-center gap-2">
+                                <i className={`fa-solid ${activeTab === 'monitoramento' ? 'fa-wave-square' : 'fa-magnifying-glass-chart'} text-blue-500`}></i>
+                                {activeTab === 'monitoramento' ? 'Monitoramento Transacional Meep' : 'Investigação Especializada de Vínculos'}
                             </h2>
-                            <div className="text-[10px] bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-full border border-emerald-500/20 font-bold uppercase tracking-widest animate-pulse">Sistema Online</div>
+                            <div className="relative">
+                                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                                <input type="text" placeholder="Buscar Lojista..." className="bg-slate-800/50 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-xs w-64 focus:outline-none focus:border-blue-500"/>
+                            </div>
                         </header>
 
-                        <div className="p-8">
+                        <div className="flex-1 overflow-y-auto p-8 scroll-smooth">
                             {activeTab === 'monitoramento' ? (
-                                <div className="space-y-8 max-w-6xl mx-auto">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <div className="bg-[#0f172a] p-6 rounded-2xl border border-slate-800 shadow-lg">
-                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2">TXs Suspeitas (24h)</div>
-                                            <div className="text-3xl font-bold text-red-500">14</div>
-                                        </div>
-                                        <div className="bg-[#0f172a] p-6 rounded-2xl border border-slate-800 shadow-lg text-center">
-                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2">Total Bloqueado</div>
-                                            <div className="text-3xl font-bold">R$ 52,400</div>
-                                        </div>
-                                        <div className="bg-[#0f172a] p-6 rounded-2xl border border-slate-800 shadow-lg text-right">
-                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2">SLA Médio</div>
-                                            <div className="text-3xl font-bold text-blue-400">14 min</div>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-[#0f172a] rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-                                        <table className="w-full text-left">
-                                            <thead className="bg-slate-800/50 text-[10px] uppercase font-black text-slate-400">
-                                                <tr>
-                                                    <th className="px-6 py-4">Lojista / ID</th>
-                                                    <th className="px-6 py-4 text-center">Risco IA</th>
-                                                    <th className="px-6 py-4">Padrão de Suspeita</th>
-                                                    <th className="px-6 py-4 text-right">Ação</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-800">
-                                                {transactions.map(tx => (
-                                                    <tr key={tx.id} className="hover:bg-blue-500/5 transition-colors group">
-                                                        <td className="px-6 py-5">
-                                                            <div className="font-bold text-slate-200">{tx.merchant}</div>
-                                                            <div className="text-[10px] text-slate-500">{tx.id}</div>
-                                                        </td>
-                                                        <td className="px-6 py-5">
-                                                            <div className="flex justify-center">
-                                                                <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-xs ${tx.risk > 80 ? 'border-red-500 text-red-500' : 'border-emerald-500 text-emerald-500'}`}>
-                                                                    {tx.risk}
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-5 text-xs text-slate-300 italic">{tx.type}</td>
-                                                        <td className="px-6 py-5 text-right">
-                                                            <button className="bg-slate-800 group-hover:bg-blue-600 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all">TRATAR</button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="max-w-5xl mx-auto space-y-8">
-                                    {!dossier ? (
-                                        <div className="bg-[#0f172a] border-2 border-dashed border-slate-800 rounded-[40px] p-20 text-center flex flex-col items-center">
-                                            <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mb-6">
-                                                <i className={`fa-solid ${analyzing ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-up'} text-4xl text-blue-500`}></i>
-                                            </div>
-                                            <h3 className="text-2xl font-bold mb-2">{analyzing ? 'Cruzando dados do Kronoos...' : 'Upload do Dossiê do Cliente'}</h3>
-                                            <p className="text-slate-500 text-sm mb-8 max-w-sm">O sistema identificará automaticamente se o risco é no Titular ou em Vínculos (Sócios/Familiares).</p>
-                                            <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
-                                            <button onClick={() => fileInputRef.current.click()} className="bg-blue-600 hover:bg-blue-700 px-10 py-3 rounded-2xl font-bold transition-all shadow-xl shadow-blue-600/20">SELECIONAR ARQUIVO .TXT</button>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                            {/* Matrix */}
-                                            <div className="bg-[#0f172a] p-8 rounded-3xl border border-slate-800 shadow-xl">
-                                                <h4 className="text-xs font-black text-slate-500 uppercase mb-8 tracking-widest text-center">Matriz 5x5 de Probabilidade x Impacto</h4>
-                                                <div className="flex">
-                                                    <div className="flex flex-col justify-between pr-4 w-12 pt-10 pb-2">
-                                                        {[5,4,3,2,1].map(p => <div key={p} className="text-[10px] font-bold text-slate-600">P{p}</div>)}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <div className="grid grid-cols-5 gap-2 mb-2">
-                                                            {[1,2,3,4,5].map(i => <div key={i} className="text-center text-[10px] font-bold text-slate-600">I{i}</div>)}
-                                                        </div>
-                                                        <div className="grid grid-cols-5 gap-2">
-                                                            {[5,4,3,2,1].map(p => [1,2,3,4,5].map(i => {
-                                                                const val = p * i;
-                                                                const color = getRiskColor(val);
-                                                                const isActive = dossier.prob === p && dossier.imp === i;
-                                                                return (
-                                                                    <div key={`${p}-${i}`} className={`h-12 rounded-lg matrix-cell border ${color.border} ${isActive ? `${color.bg} shadow-[0_0_20px_rgba(0,0,0,0.5)] scale-110 z-10` : 'bg-slate-800/20 opacity-20'}`}></div>
-                                                                );
-                                                            }))}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Detalhes */}
-                                            <div className="space-y-4">
-                                                <div className="bg-blue-600 p-6 rounded-3xl flex justify-between items-center shadow-2xl">
-                                                    <div>
-                                                        <div className="text-[10px] font-black uppercase opacity-60">Sujeito da Investigação</div>
-                                                        <div className="text-xl font-bold">{dossier.target}</div>
-                                                    </div>
-                                                    <button onClick={() => setDossier(null)} className="bg-black/20 p-2 rounded-lg text-xs hover:bg-black/40"><i className="fa-solid fa-rotate-right"></i></button>
-                                                </div>
-                                                {dossier.checks.map((c, i) => (
-                                                    <div key={i} className="bg-[#0f172a] p-6 rounded-3xl border border-slate-800 shadow-xl">
-                                                        <div className="flex justify-between mb-4">
-                                                            <div className="font-bold text-lg">{c.title}</div>
-                                                            <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase bg-slate-900 border ${getRiskColor(dossier.score).text}`}>{c.status}</span>
-                                                        </div>
-                                                        <p className="text-sm text-slate-400 mb-6 italic">"{c.desc}"</p>
-                                                        <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
-                                                            <div className="text-[10px] font-black text-blue-500 uppercase mb-1">Tratamento Meep</div>
-                                                            <div className="text-sm font-bold text-slate-200 mb-2">{c.action}</div>
-                                                            <div className="text-[9px] text-slate-500 font-bold border-t border-slate-800 pt-2 flex justify-between italic">
-                                                                <span>Base Legal:</span>
-                                                                <span>{c.legal}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                <div className="space-y-8 animate-in fade-in duration-500">
+                                    {/* KPIs */}
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                        <div className="bg-[#0f172a] p-5 rounded-xl border border-slate-800">
+                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2 tracking-widest">TXS em Análise (24h)</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-2xl font-bold">142</span>
+                                                <span className="text-[10px] text-red-400 font-bold bg-red-400/10 px-1.5 py-0.5 rounded">+12%</span>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                                        <div className="bg-[#0f172a] p-5 rounded-xl border border-slate-800">
+                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2 tracking-widest">Alertas Críticos</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-2xl font-bold text-red-500">08</span>
+                                                <span className="text-[10px] text-slate-500 font-bold">Pendente</span>
+                                            </div>
+                                        </div>
+                                        <div className="bg-[#0f172a] p-5 rounded-xl border border-slate-800">
+                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2 tracking-widest">Total Bloqueado</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-2xl font-bold tracking-tighter">R$ 48.9k</span>
+                                                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-400/10 px-1.5 py-0.5 rounded">-4%</span>
+                                            </div>
+                                        </div>
+                                        <div className="bg-[#0f172a] p-5 rounded-xl border border-slate-800">
+                                            <div className="text-slate-500 text-[10px] font-bold uppercase mb-2 tracking-widest">SLA de Resposta</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-2xl font-bold text-blue-400 font-mono">18 min</span>
+                                                <span className="text-[10px] text-slate-500 font-bold
